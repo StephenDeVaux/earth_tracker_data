@@ -5,60 +5,71 @@ const filePathC02 = "./data/co2/CO2GlobalAverage.csv.csv"
 const filePathNorthSeaIce = "./data/sea_ice/northen_sea_ice.csv"
 const filePathSouthSeaIce = "./data/sea_ice/southern_sea_ice.csv"
 
-const fileResultsNorthSeaIce = "./results/north_sea_ice.json"
+const fileJSONNorthSeaIce = "./results/north_sea_ice.json"
+const fileJSONSouthSeaIce = "./results/South_sea_ice.json"
+const fileJSONSeaIce = "./results/sea_ice.json"
 
-const readCSV = () => {
-    fs.createReadStream(filePathNorthSeaIce)
-        .pipe(parse({ delimiter: ',' }, parseData));
-}
-
-const writeJsonFile = (object, fileName) => {
-    let data = JSON.stringify(object);
-    fs.writeFileSync(fileName, data);
-}
-
-const parseData = (err, csvData) => {
-    if (err) {
-        console.log('Error reading CSV file1', err)
-        return
+const csvRowToObject = (dayDataArray) => {
+    return yearData = {
+        year: Number(dayDataArray[0]),
+        month: Number(dayDataArray[1]),
+        day: Number(dayDataArray[2]),
+        extent: Number(dayDataArray[3]),
+        sourceData: dayDataArray[5]
     }
-    console.log("Number of rows - ", csvData.length)
-    console.log(csvData[0])
-    console.log(csvData[1])
-    console.log(csvData[2])
-    console.log(csvData[csvData.length - 1])
+}
 
-    newFilteredArr = []
-    newFilteredArr.push(csvData[0])
-    newFilteredArr.push(csvData[1])
-
-    minimumPoint = csvData[2]
-    for (i = 2; i < csvData.length - 1; i++) {
-        if (minimumPoint[0] === csvData[i][0]) {
-            if (minimumPoint[3] > csvData[i][3]) {
-                minimumPoint = csvData[i]
-            }
-        } else {
-            //add smallest year ice and start next year
-            newFilteredArr.push(minimumPoint)
-            minimumPoint = csvData[i]
+const readCSVandSaveJson = (fileName, fileNameJSON) => {
+    fs.createReadStream(fileName).pipe(parse({ delimiter: ',' }, function(err, csvData) {
+        // CSV dataformat
+        // ["Year"," Month"," Day","     Extent","    Missing"," Source Data"]
+        if (err) {
+            console.log('Error reading CSV file1', err)
+            return
         }
-    }
 
-    // for (row of csvData) {
-    //     parseCountryRCP(row, data)
-    //     parseYearAndMonth(row, data2)
-    // }
-    // totalsTask1(data)
-    // itemTotalsTask1(data)
-    // writeJsonFile(data, file_pathTask1)
-    // writeJsonFile(data2, file_pathTask2)
-    // writeJsonFile(data2, file_pathTask3)
-    writeJsonFile(newFilteredArr, fileResultsNorthSeaIce)
+        yearlyMinimumArr = []
+        let minimumDay = csvRowToObject(csvData[2])
+        for (i = 2; i < csvData.length - 1; i++) {
+            currentDay = csvRowToObject(csvData[i])
+            if (minimumDay.year === currentDay.year) {
+                if (currentDay.extent < minimumDay.extent) {
+                    minimumDay = {...currentDay }
+                }
+            } else {
+                yearlyMinimumArr.push({...minimumDay })
+                minimumDay = {...currentDay }
+            }
+        }
 
-    // console.log(newFilteredArr)
-    console.log('Complete')
+        let data = JSON.stringify(yearlyMinimumArr);
+        fs.writeFileSync(fileNameJSON, data);
+    }));
 }
+
 
 console.log("Start program")
-readCSV()
+readCSVandSaveJson(filePathNorthSeaIce, fileJSONNorthSeaIce)
+readCSVandSaveJson(filePathSouthSeaIce, fileJSONSouthSeaIce)
+
+let northSeaIce = JSON.parse(fs.readFileSync(fileJSONNorthSeaIce));
+let southSeaIce = JSON.parse(fs.readFileSync(fileJSONSouthSeaIce));
+let totalSeaIce = []
+let errorsCount = 0
+
+for (i = 0; i <= northSeaIce.length - 1; i++) {
+    if (northSeaIce[i].year === southSeaIce[i].year) {
+        totalSeaIce.push({
+            year: northSeaIce[i].year,
+            extent: northSeaIce[i].extent + southSeaIce[i].extent,
+        })
+    } else {
+        errorsCount += 1
+    }
+}
+
+
+fs.writeFileSync(fileJSONSeaIce, JSON.stringify(totalSeaIce));
+
+console.log("Errors count in file: " + errorsCount)
+console.log("complete")
